@@ -1,0 +1,33 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python compiled bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Sensitive Configuration & API Keys (DO NOT COMMIT!)
+**/config/api_keys.json
+config/api_keys.json
+api_keys.json
+.env
+*.env
+*.pem
+*.key
+
+# Temporary / Scratch files
+scratch/
+test_*.py
+*.tmp
+*.log
+
+# IDE & OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
