@@ -2379,7 +2379,10 @@ class MainWindow(QMainWindow):
         return w
 
     def _tick_clock(self):
-        self._clock_lbl.setText(time.strftime("%H:%M:%S"))
+        t_str = time.strftime("%I:%M:%S %p")
+        if t_str.startswith("0"):
+            t_str = t_str[1:]
+        self._clock_lbl.setText(t_str)
         self._date_lbl.setText(time.strftime("%a %d %b %Y"))
 
     def _build_left_panel(self) -> QWidget:
@@ -2720,7 +2723,10 @@ class MainWindow(QMainWindow):
         """Slot — runs on Qt main thread. Updates and shows the content panel."""
         import time as _time
         self._content_title_lbl.setText(title.upper()[:48])
-        self._content_ts_lbl.setText(_time.strftime("%H:%M:%S"))
+        t_str = _time.strftime("%I:%M:%S %p")
+        if t_str.startswith("0"):
+            t_str = t_str[1:]
+        self._content_ts_lbl.setText(t_str)
         self._content_display.setPlainText(text)
         self._content_display.moveCursor(
             self._content_display.textCursor().MoveOperation.Start
