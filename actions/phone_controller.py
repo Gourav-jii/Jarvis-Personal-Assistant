@@ -178,22 +178,17 @@ def unlock_phone(pin: str = "") -> str:
 
     # 3. Wake screen (224 = KEYCODE_WAKEUP, safe even if already on)
     _run_adb("shell", "input", "keyevent", "224")
-    time.sleep(0.2)
-
-    # 4. Try Android standard lock dismiss
-    _run_adb("shell", "wm", "dismiss-keyguard")
-    _run_adb("shell", "input", "keyevent", "82")  # KEYCODE_MENU (unlocks standard screens)
-    time.sleep(0.3)
-
-    # 5. Dynamic swipe up based on exact device screen dimensions
-    w, h = get_screen_size()
-    start_x = w // 2
-    start_y = int(h * 0.85)
-    end_y   = int(h * 0.20)
-    _run_adb("shell", "input", "swipe", str(start_x), str(start_y), str(start_x), str(end_y), "250")
     time.sleep(0.4)
 
-    # 6. Check for PIN
+    # 4. Dynamic swipe up to reveal lock screen PIN keypad
+    w, h = get_screen_size()
+    start_x = w // 2
+    start_y = int(h * 0.80)
+    end_y   = int(h * 0.20)
+    _run_adb("shell", "input", "swipe", str(start_x), str(start_y), str(start_x), str(end_y), "250")
+    time.sleep(0.6)
+
+    # 5. Check for PIN
     if not pin:
         try:
             cfg_path = BASE_DIR / "config" / "api_keys.json"
@@ -205,10 +200,14 @@ def unlock_phone(pin: str = "") -> str:
 
     if pin:
         _run_adb("shell", "input", "text", str(pin))
-        time.sleep(0.2)
+        time.sleep(0.3)
         _run_adb("shell", "input", "keyevent", "66")  # Enter key
+        time.sleep(0.3)
         return "Phone unlocked successfully, sir."
 
+    # If no PIN, dismiss keyguard directly
+    _run_adb("shell", "wm", "dismiss-keyguard")
+    _run_adb("shell", "input", "keyevent", "82")
     return "Phone screen wake karke unlock kar diya hai, sir."
 
 def lock_phone() -> str:
