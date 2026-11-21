@@ -172,9 +172,9 @@ class _VADGate:
     def __init__(
         self,
         sample_rate: int = 16000,
-        threshold: float = 0.012,
-        silence_secs: float = 0.75,
-        min_speech_secs: float = 0.30,
+        threshold: float = 0.007,
+        silence_secs: float = 0.65,
+        min_speech_secs: float = 0.22,
         max_utterance_secs: float = 20.0,
         prebuffer_secs: float = 0.45,
     ):
@@ -186,7 +186,7 @@ class _VADGate:
         self.max_frames     = int(max_utterance_secs * sr / 1024)
         self.prebuf: list[np.ndarray] = []
         self.prebuf_max     = int(prebuffer_secs * sr / 1024)
-        self.noise_floor    = 0.006
+        self.noise_floor    = 0.003
         self.reset()
 
     def reset(self):
@@ -238,7 +238,7 @@ class _VADGate:
             max_amp = float(np.max(np.abs(utterance)))
             self.reset()
             # If the utterance doesn't have sufficient energy or length, discard it
-            if dur < 0.30 or peak_rms < 0.010 or max_amp < 0.030:
+            if dur < 0.22 or peak_rms < 0.004 or max_amp < 0.015:
                 print(f"[Pipeline] 🔇 Faint noise discarded (dur={dur:.2f}s, rms={peak_rms:.4f}, peak={max_amp:.4f})", flush=True)
                 return None
             print(f"[Pipeline] 🎙️ Utterance captured ({dur:.1f}s, RMS: {peak_rms:.4f}, Peak: {max_amp:.4f})", flush=True)
@@ -567,6 +567,13 @@ class TextPipeline:
 
     async def _converse(self, user_text: str) -> None:
         """One full user turn: LLM ⇄ tools until final answer."""
+        low = user_text.strip().lower()
+        if any(cmd in low for cmd in ("change api key", "update api key", "change key", "settings", "open settings", "quota reached", "api key setting")):
+            self.ui.write_log("SYS: Opening API Key & System Settings overlay...")
+            self.say("Opening system settings, sir. You can update your API key or provider now.")
+            self.ui.prompt_reconfig()
+            return
+
         self.history.append({"role": "user", "content": user_text})
         self._trim_history()
 
@@ -673,8 +680,17 @@ class TextPipeline:
 
         if gen_error and not content_buf:
             err = str(gen_error[0])
-            self.ui.write_log(f"ERR: {err[:160]}")
-            self.say(f"Sorry sir, the language model call failed. {err[:140]}")
+            is_auth_or_quota = any(k in err.lower() for k in (
+                "api key not valid", "1007", "quota", "resource_exhausted",
+                "insufficient_quota", "rate limit", "429", "exceeded your current quota"
+            ))
+            if is_auth_or_quota:
+                self.ui.write_log("ERR: API key or Quota limit reached. Opening Settings overlay...")
+                self.say("Sir, the API key quota has been reached. Please update your key in Settings.")
+                self.ui.prompt_reconfig()
+            else:
+                self.ui.write_log(f"ERR: {err[:160]}")
+                self.say(f"Sorry sir, the language model call failed. {err[:140]}")
             return "", []
 
         # flush tail

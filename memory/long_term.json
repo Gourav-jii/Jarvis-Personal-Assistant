@@ -2,10 +2,19 @@
   "identity": {
     "name": {
       "value": "Gourav",
-      "updated": "2026-11-20"
+      "updated": "2026-11-21"
+    },
+    "wizard_level": {
+      "value": "island level wizard",
+      "updated": "2026-11-21"
     }
   },
-  "preferences": {},
+  "preferences": {
+    "default_browser": {
+      "value": "Chrome",
+      "updated": "2026-11-21"
+    }
+  },
   "projects": {},
   "relationships": {},
   "wishes": {},

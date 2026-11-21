@@ -70,19 +70,19 @@ class WhisperSTT:
 
             # Check RMS energy — if silence / faint noise floor, skip Whisper entirely
             rms = float(np.sqrt(np.mean(np.square(audio)) + 1e-12))
-            if rms < 0.008:
+            if rms < 0.003:
                 return ""
 
             target_lang = self._language
             segments, info = self._model.transcribe(
                 audio,
                 language=target_lang,
-                initial_prompt="Hello Jarvis, namaste",
+                initial_prompt="Hello Jarvis, namaste, open karo, message bhejo, WhatsApp, Chrome, suno, kya haal hai.",
                 beam_size=1,                       # greedy — 2-3x faster
                 best_of=1,
                 condition_on_previous_text=False,  # no hallucinations, faster
                 vad_filter=True,
-                vad_parameters={"min_silence_duration_ms": 300},
+                vad_parameters={"min_silence_duration_ms": 250},
             )
 
             # If auto-detected language is Urdu / Arabic script, reroute to Hindi
@@ -92,24 +92,24 @@ class WhisperSTT:
                 segments, _ = self._model.transcribe(
                     audio,
                     language="hi",
-                    initial_prompt="नमस्ते, मैं जार्विस हूँ।",
+                    initial_prompt="नमस्ते, मैं जार्विस हूँ। व्हाट्सएप ओपन करो। मैसेज भेजो।",
                     beam_size=1,
                     best_of=1,
                     condition_on_previous_text=False,
                     vad_filter=True,
-                    vad_parameters={"min_silence_duration_ms": 300},
+                    vad_parameters={"min_silence_duration_ms": 250},
                 )
 
             valid_texts = []
             for s in segments:
                 # Discard segments flagged as non-speech / noise
-                if getattr(s, "no_speech_prob", 0.0) > 0.45:
+                if getattr(s, "no_speech_prob", 0.0) > 0.70:
                     continue
                 # Discard segments with extremely low confidence
-                if getattr(s, "avg_logprob", 0.0) < -1.15:
+                if getattr(s, "avg_logprob", 0.0) < -2.20:
                     continue
                 # Discard repetitive loops
-                if getattr(s, "compression_ratio", 1.0) > 2.4:
+                if getattr(s, "compression_ratio", 1.0) > 2.8:
                     continue
                 st = s.text.strip()
                 if st:
