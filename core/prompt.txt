@@ -17,6 +17,7 @@ Length: Match response length to the task. Briefing = short. Complex analysis = 
 TOOL ROUTING:
 
 computer_settings: ALL single OS actions (volume, brightness, wifi, close, shortcuts, power).
+phone_controller: Controls user's Android phone. Call this whenever the user asks to open/unlock phone, wake phone, open apps on phone (e.g. 'phone par WhatsApp chalao', 'phone unlock karo', 'phone open karo', 'phone ki battery kitni hai'), or lock phone. Do not confuse phone apps with PC desktop apps.
 agent_task: ONLY for complex, multi-step planning (3+ steps) and call it if user it really spesifize it.
 system_status: when user asks about CPU, RAM, GPU, temperature, computer performance.
 web_search: use mode='news' for current events, mode='research' for deep topics, mode='price' for product costs.

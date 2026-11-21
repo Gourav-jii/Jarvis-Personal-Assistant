@@ -22,6 +22,8 @@ api_keys.json
 
 # Temporary / Scratch files
 scratch/
+tools/
+*.zip
 test_*.py
 *.tmp
 *.log

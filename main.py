@@ -64,6 +64,7 @@ from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
 from actions.system_monitor    import SystemMonitor, get_system_status
 from actions.proactive         import ProactiveEngine
+from actions.phone_controller  import phone_controller
 
 
 def get_base_dir():
@@ -321,6 +322,34 @@ TOOL_DECLARATIONS = [
                 "path":        {"type": "STRING", "description": "Save path for screenshot"},
                 "incognito":   {"type": "BOOLEAN", "description": "Open in private/incognito mode"},
                 "clear_first": {"type": "BOOLEAN", "description": "Clear field before typing (default: true)"},
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "phone_controller",
+        "description": (
+            "Controls the user's Android phone via ADB (USB / Wireless) or Microsoft Phone Link. "
+            "Use when user asks to open phone, unlock phone, lock phone screen, open apps on phone "
+            "(e.g. WhatsApp, YouTube, Camera, Instagram, Spotify, Chrome, Settings), check phone battery status, "
+            "or go to home screen on phone. Works for commands like 'phone unlock karo', 'phone open karo', "
+            "'phone par WhatsApp open karo', 'phone ki battery kitni hai', 'phone lock kar do'."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "unlock | open_app | lock | battery | home"
+                },
+                "app_name": {
+                    "type": "STRING",
+                    "description": "Optional name of app to open on phone: WhatsApp, YouTube, Camera, Instagram, Spotify, Chrome, Settings, etc."
+                },
+                "pin": {
+                    "type": "STRING",
+                    "description": "Optional lock-screen PIN if user specified one"
+                }
             },
             "required": ["action"]
         }
@@ -850,6 +879,10 @@ class JarvisLive:
             elif name == "close_camera":
                 self.ui.stop_camera_stream()
                 result = "Camera closed."
+
+            elif name == "phone_controller":
+                r = await loop.run_in_executor(None, lambda: phone_controller(parameters=args, player=self.ui))
+                result = r or "Phone command executed, sir."
 
             elif name == "computer_settings":
                 r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))

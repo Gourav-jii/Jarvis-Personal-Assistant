@@ -37,6 +37,12 @@ A futuristic desktop AI assistant inspired by Tony Stark's J.A.R.V.I.S. Built wi
   - **Application Launcher**: Launch any desktop program or website (e.g. WhatsApp, Chrome, VS Code, Spotify, Notepad, Calculator).
   - **System Settings**: Control volume, screen brightness, Wi-Fi, window states, and media playback.
 
+- **Android Phone Voice Controller**:
+  - **Screen Unlock & Wake**: Wake phone, swipe up lock screen, and automatically enter PIN by voice (*"Jarvis, mera phone open karo"*, *"Jarvis, phone unlock karo"*).
+  - **Mobile App Launcher**: Open phone apps instantly (*"Jarvis, phone par WhatsApp open karo"*, *"phone par YouTube chalao"*, *"phone ka camera open karo"*).
+  - **Phone Telemetry**: Real-time battery status by voice (*"Jarvis, phone ki battery kitni hai?"*).
+  - **Wireless / USB ADB & Phone Link**: Bundled Google Android ADB binaries with auto-fallback to Microsoft Phone Link on Windows.
+
 - **Mobile Remote Dashboard**:
   - Built-in secure FastAPI server with AES-256 session encryption.
   - Instant pairing via QR Code or one-time passkey for controlling Jarvis from your smartphone.
