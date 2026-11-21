@@ -117,13 +117,9 @@ def get_connected_devices() -> list[str]:
     """Returns list of connected and authorized Android device IDs."""
     return get_device_status()["devices"]
 
-def _open_phone_link() -> str:
-    """Launch Microsoft Phone Link (Windows default)."""
-    try:
-        os.system("start ms-phone-link:")
-        return "Opened Microsoft Phone Link on your desktop, sir."
-    except Exception as e:
-        return f"Could not launch Phone Link: {e}"
+def _handle_no_device() -> str:
+    """Friendly message when no phone is connected via ADB."""
+    return "Sir, koi phone connect nahi mila. Phone ko USB cable se jodein aur USB Debugging ON karein."
 
 def _is_screen_on() -> bool:
     """Check if device screen is currently on."""
@@ -154,7 +150,7 @@ def unlock_phone(pin: str = "") -> str:
 
     # 2. No ADB device attached
     if not st["devices"]:
-        return _open_phone_link()
+        return _handle_no_device()
 
     # 3. Wake screen (224 = KEYCODE_WAKEUP, safe even if already on)
     _run_adb("shell", "input", "keyevent", "224")
@@ -210,7 +206,7 @@ def open_phone_app(app_name: str) -> str:
             "Sir, phone par 'Allow USB Debugging' popup par 'Allow' karein pehle."
         )
     if not st["devices"]:
-        return _open_phone_link()
+        return _handle_no_device()
 
     # Make sure phone is awake
     _run_adb("shell", "input", "keyevent", "224")
@@ -298,5 +294,5 @@ if __name__ == "__main__":
         print("Device is UNAUTHORIZED! User must allow debugging on screen.")
         print(unlock_phone())
     else:
-        print("No devices. Testing Phone Link trigger...")
+        print("No devices found.")
         print(unlock_phone())
