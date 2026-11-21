@@ -1400,9 +1400,13 @@ class JarvisLive:
                 print(f"[JARVIS] Error ({type(e).__name__}): {e}")
                 traceback.print_exc()
 
-                # Invalid API key — stop hammering the API, prompt re-configuration
-                if "API key not valid" in err_str or "1007" in err_str:
-                    self.ui.write_log("ERR: API key invalid — please re-enter your key.")
+                # Invalid API key or Quota limit reached — prompt re-configuration
+                is_auth_or_quota = any(k in err_str.lower() for k in (
+                    "api key not valid", "1007", "quota", "resource_exhausted",
+                    "insufficient_quota", "rate limit", "429", "exceeded your current quota"
+                ))
+                if is_auth_or_quota:
+                    self.ui.write_log("ERR: API key or Quota limit reached. Please update your key in Settings.")
                     self.ui.set_state("SLEEPING")
                     self.ui.prompt_reconfig()
                     while not self.ui._win._ready:

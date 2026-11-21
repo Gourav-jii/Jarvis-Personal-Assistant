@@ -78,9 +78,10 @@ def _trip_failover(reason: str) -> bool:
 # ── Known provider presets ─────────────────────────────────────────────────────
 # base URL (no trailing slash) + suggested default model.
 PRESETS = {
+    "gemini":     {"url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-flash-lite-latest"},
     "deepseek":   {"url": "https://api.deepseek.com",             "model": "deepseek-chat"},
     "openrouter": {"url": "https://openrouter.ai/api/v1",         "model": "deepseek/deepseek-chat"},
-    "groq":       {"url": "https://api.groq.com/openai/v1",       "model": "llama-3.3-70b-versatile"},
+    "groq":       {"url": "https://api.groq.com/openai/v1",       "model": "openai/gpt-oss-120b"},
     "empero":     {"url": "https://free.empero.org/v1",           "model": "glm-5.3-flash"},
     "together":   {"url": "https://api.together.xyz/v1",          "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo"},
     "mistral":    {"url": "https://api.mistral.ai/v1",            "model": "mistral-large-latest"},

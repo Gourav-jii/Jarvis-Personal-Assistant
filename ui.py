@@ -1169,15 +1169,16 @@ class _CameraPreview(QWidget):
 
 class SetupOverlay(QWidget):
     done = pyqtSignal(str, str, str, str)   # api_key, endpoint_url, model_name, os_name
+    cancelled = pyqtSignal()
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, is_settings: bool = False):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             SetupOverlay {{
                 background: rgba(0, 6, 10, 245);
                 border: 1px solid {C.BORDER_B};
-                border-radius: 6px;
+                border-radius: 8px;
             }}
         """)
 
@@ -1187,8 +1188,8 @@ class SetupOverlay(QWidget):
         self._sel_os = detected
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 22, 30, 22)
-        layout.setSpacing(8)
+        layout.setContentsMargins(26, 16, 26, 18)
+        layout.setSpacing(6)
 
         def _lbl(txt, font_size=9, bold=False, color=C.PRI,
                  align=Qt.AlignmentFlag.AlignCenter):
@@ -1199,59 +1200,101 @@ class SetupOverlay(QWidget):
             w.setStyleSheet(f"color: {color}; background: transparent;")
             return w
 
-        layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", 13, True))
-        layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", 9, color=C.PRI_DIM))
-        layout.addSpacing(6)
+        # ── Header bar with title and close button ─────────────────────────
+        hdr = QHBoxLayout()
+        hdr_title = "◈  SYSTEM SETTINGS & API KEYS" if (is_settings or API_FILE.exists()) else "◈  INITIALISATION REQUIRED"
+        hdr_lbl = _lbl(hdr_title, 11, True, color=C.PRI, align=Qt.AlignmentFlag.AlignLeft)
+        hdr.addWidget(hdr_lbl)
+        hdr.addStretch()
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setToolTip("Close / Dismiss")
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent; color: {C.TEXT_DIM}; border: none;
+            }}
+            QPushButton:hover {{
+                color: {C.RED}; background: #220008; border-radius: 3px;
+            }}
+        """)
+        close_btn.clicked.connect(self._cancel)
+        hdr.addWidget(close_btn)
+        layout.addLayout(hdr)
+
+        sub_text = "Update LLM provider, API key, model or endpoint." if (is_settings or API_FILE.exists()) else "Configure J.A.R.V.I.S. before first boot."
+        layout.addWidget(_lbl(sub_text, 8, color=C.PRI_DIM, align=Qt.AlignmentFlag.AlignLeft))
+        layout.addSpacing(2)
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep)
-        layout.addSpacing(4)
+        layout.addSpacing(2)
 
         # ── Provider preset row ────────────────────────────────────────────
         layout.addWidget(_lbl("PROVIDER PRESET", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
-        prov_row = QHBoxLayout(); prov_row.setSpacing(6)
+        prov_row = QHBoxLayout(); prov_row.setSpacing(5)
         self._prov_btns: dict[str, QPushButton] = {}
-        for pkey, plabel in [("empero", "Free ★"),
+        for pkey, plabel in [("gemini", "Gemini"),
+                             ("groq", "Groq"),
                              ("deepseek", "DeepSeek"),
                              ("openrouter", "OpenRouter"),
-                             ("groq", "Groq"),
+                             ("empero", "Free ★"),
                              ("custom", "Custom…")]:
             b = QPushButton(plabel)
             b.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
-            b.setFixedHeight(28)
+            b.setFixedHeight(26)
             b.setCursor(Qt.CursorShape.PointingHandCursor)
-            b.clicked.connect(lambda _, k=pkey: self._sel_provider(k))
+            b.clicked.connect(lambda _, k=pkey: self._sel_provider(k, update_fields=True))
             prov_row.addWidget(b)
             self._prov_btns[pkey] = b
         layout.addLayout(prov_row)
 
         _PRESET_DEFAULTS = {
-            "empero":     ("https://free.empero.org/v1",   "glm-5.3-flash",            False),
-            "deepseek":   ("https://api.deepseek.com",     "deepseek-chat",            False),
+            "gemini":     ("https://generativelanguage.googleapis.com/v1beta/openai", "gemini-flash-lite-latest", True),
+            "groq":       ("https://api.groq.com/openai/v1", "openai/gpt-oss-120b", True),
+            "deepseek":   ("https://api.deepseek.com",     "deepseek-chat",            True),
             "openrouter": ("https://openrouter.ai/api/v1", "deepseek/deepseek-chat",   True),
-            "groq":       ("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile", True),
+            "empero":     ("https://free.empero.org/v1",   "glm-5.3-flash",            False),
             "custom":     ("https://api.deepseek.com",     "deepseek-chat",            True),
         }
         self._PRESET_DEFAULTS = _PRESET_DEFAULTS
 
-        # ── API key ────────────────────────────────────────────────────────
-        layout.addWidget(_lbl("API KEY  (empty for local servers)", 8, color=C.TEXT_DIM,
+        # ── API key with show/hide toggle ──────────────────────────────────
+        layout.addWidget(_lbl("API KEY  (empty for local servers / free provider)", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
+        key_box = QHBoxLayout(); key_box.setSpacing(4)
         self._key_input = QLineEdit()
         self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._key_input.setPlaceholderText("sk-…")
-        self._key_input.setFont(QFont("Courier New", 10))
-        self._key_input.setFixedHeight(32)
+        self._key_input.setPlaceholderText("Paste API key here (AIzaSy... / gsk_... / sk-...)")
+        self._key_input.setFont(QFont("Courier New", 9))
+        self._key_input.setFixedHeight(30)
         self._key_input.setStyleSheet(f"""
             QLineEdit {{
                 background: #000d12; color: {C.TEXT};
-                border: 1px solid {C.BORDER}; border-radius: 3px; padding: 4px 8px;
+                border: 1px solid {C.BORDER}; border-radius: 3px; padding: 3px 8px;
             }}
             QLineEdit:focus {{ border: 1px solid {C.PRI}; }}
         """)
-        layout.addWidget(self._key_input)
-        layout.addSpacing(6)
+        key_box.addWidget(self._key_input)
+
+        self._show_key_btn = QPushButton("👁")
+        self._show_key_btn.setFixedSize(30, 30)
+        self._show_key_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._show_key_btn.setToolTip("Show / Hide Key")
+        self._show_key_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #000d12; color: {C.TEXT_MED};
+                border: 1px solid {C.BORDER}; border-radius: 3px;
+            }}
+            QPushButton:hover {{ color: {C.PRI}; border-color: {C.PRI}; }}
+        """)
+        self._show_key_btn.clicked.connect(self._toggle_show_key)
+        key_box.addWidget(self._show_key_btn)
+        layout.addLayout(key_box)
+        layout.addSpacing(2)
 
         # ── Endpoint + model (editable for full control) ──────────────────
         url_row = QHBoxLayout(); url_row.setSpacing(6)
@@ -1259,8 +1302,8 @@ class SetupOverlay(QWidget):
         url_col.addWidget(_lbl("ENDPOINT URL", 7, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
         self._url_input = QLineEdit()
-        self._url_input.setFont(QFont("Courier New", 9))
-        self._url_input.setFixedHeight(30)
+        self._url_input.setFont(QFont("Courier New", 8))
+        self._url_input.setFixedHeight(28)
         self._url_input.setStyleSheet(self._key_input.styleSheet())
         url_col.addWidget(self._url_input)
         url_row.addLayout(url_col, stretch=3)
@@ -1268,63 +1311,118 @@ class SetupOverlay(QWidget):
         mod_col.addWidget(_lbl("MODEL", 7, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
         self._model_input = QLineEdit()
-        self._model_input.setFont(QFont("Courier New", 9))
-        self._model_input.setFixedHeight(30)
+        self._model_input.setFont(QFont("Courier New", 8))
+        self._model_input.setFixedHeight(28)
         self._model_input.setStyleSheet(self._key_input.styleSheet())
         mod_col.addWidget(self._model_input)
         url_row.addLayout(mod_col, stretch=2)
         layout.addLayout(url_row)
-        layout.addSpacing(10)
+        layout.addSpacing(4)
 
-        self._sel_provider_key = "empero"
-        self._sel_provider("empero")
+        # ── Load existing config if available ──────────────────────────────
+        existing_key = ""
+        existing_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+        existing_model = "gemini-flash-lite-latest"
+        existing_os = detected
+        matched_provider = "gemini"
+
+        if API_FILE.exists():
+            try:
+                cfg = json.loads(API_FILE.read_text(encoding="utf-8"))
+                existing_key = cfg.get("llm_api_key") or cfg.get("gemini_api_key") or ""
+                existing_url = cfg.get("llm_url") or existing_url
+                existing_model = cfg.get("llm_model") or existing_model
+                existing_os = cfg.get("os_system") or existing_os
+                u = existing_url.lower()
+                if "googleapis" in u: matched_provider = "gemini"
+                elif "groq" in u: matched_provider = "groq"
+                elif "deepseek" in u: matched_provider = "deepseek"
+                elif "openrouter" in u: matched_provider = "openrouter"
+                elif "empero" in u: matched_provider = "empero"
+                else: matched_provider = "custom"
+            except Exception:
+                pass
+
+        self._sel_provider_key = matched_provider
+        self._sel_provider(matched_provider, update_fields=False)
+        self._key_input.setText(existing_key)
+        self._url_input.setText(existing_url)
+        self._model_input.setText(existing_model)
 
         sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
         sep2.setStyleSheet(f"color: {C.BORDER};"); layout.addWidget(sep2)
-        layout.addSpacing(4)
+        layout.addSpacing(2)
 
         layout.addWidget(_lbl("OPERATING SYSTEM", 8, color=C.TEXT_DIM,
                                align=Qt.AlignmentFlag.AlignLeft))
-        det_name = {"windows": "Windows", "mac": "macOS", "linux": "Linux"}[detected]
-        layout.addWidget(_lbl(f"Auto-detected: {det_name}", 8, color=C.ACC2,
-                               align=Qt.AlignmentFlag.AlignLeft))
-
         os_row = QHBoxLayout(); os_row.setSpacing(6)
         self._os_btns: dict[str, QPushButton] = {}
-        for key, label in [("windows","⊞  Windows"),("mac","  macOS"),("linux","🐧  Linux")]:
+        for key, label in [("windows","⊞  Windows"),("mac","🍎  macOS"),("linux","🐧  Linux")]:
             btn = QPushButton(label)
-            btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
-            btn.setFixedHeight(32)
+            btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+            btn.setFixedHeight(28)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.clicked.connect(lambda _, k=key: self._sel(k))
             os_row.addWidget(btn)
             self._os_btns[key] = btn
         layout.addLayout(os_row)
-        self._sel(detected)
-        layout.addSpacing(12)
+        self._sel(existing_os)
+        layout.addSpacing(8)
 
-        init_btn = QPushButton("▸  INITIALISE SYSTEMS")
-        init_btn.setFont(QFont("Courier New", 10, QFont.Weight.Bold))
-        init_btn.setFixedHeight(36)
+        # ── Action buttons ────────────────────────────────────────────────
+        btn_row = QHBoxLayout(); btn_row.setSpacing(8)
+        if is_settings or API_FILE.exists():
+            cancel_btn = QPushButton("✕  CANCEL")
+            cancel_btn.setFont(QFont("Courier New", 9))
+            cancel_btn.setFixedHeight(34)
+            cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            cancel_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: transparent; color: {C.TEXT_DIM};
+                    border: 1px solid {C.BORDER}; border-radius: 3px;
+                }}
+                QPushButton:hover {{
+                    color: {C.RED}; border-color: {C.RED};
+                }}
+            """)
+            cancel_btn.clicked.connect(self._cancel)
+            btn_row.addWidget(cancel_btn, stretch=1)
+
+        init_btn = QPushButton("💾  SAVE & APPLY" if (is_settings or API_FILE.exists()) else "▸  INITIALISE SYSTEMS")
+        init_btn.setFont(QFont("Courier New", 9, QFont.Weight.Bold))
+        init_btn.setFixedHeight(34)
         init_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         init_btn.setStyleSheet(f"""
             QPushButton {{
-                background: transparent; color: {C.PRI};
+                background: #001f2e; color: {C.PRI};
                 border: 1px solid {C.PRI_DIM}; border-radius: 3px;
             }}
             QPushButton:hover {{
-                background: {C.PRI_GHO}; border: 1px solid {C.PRI};
+                background: {C.PRI}; color: #001a22; border: 1px solid {C.PRI};
             }}
         """)
         init_btn.clicked.connect(self._submit)
-        layout.addWidget(init_btn)
+        btn_row.addWidget(init_btn, stretch=2)
+        layout.addLayout(btn_row)
+
+    def _toggle_show_key(self):
+        if self._key_input.echoMode() == QLineEdit.EchoMode.Password:
+            self._key_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._show_key_btn.setText("🔒")
+        else:
+            self._key_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self._show_key_btn.setText("👁")
+
+    def _cancel(self):
+        self.cancelled.emit()
+        self.hide()
 
     def _sel(self, key: str):
         self._sel_os = key
         pal = {"windows":(C.PRI,"#001a22"),"mac":(C.ACC2,"#1a1400"),"linux":(C.GREEN,"#001a0d")}
         for k, btn in self._os_btns.items():
             if k == key:
-                fg, bg = pal[k]
+                fg, bg = pal.get(k, (C.PRI, "#001a22"))
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background: {fg}; color: {bg};
@@ -1340,7 +1438,7 @@ class SetupOverlay(QWidget):
                     QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
                 """)
 
-    def _sel_provider(self, key: str):
+    def _sel_provider(self, key: str, update_fields: bool = True):
         self._sel_provider_key = key
         for k, btn in self._prov_btns.items():
             if k == key:
@@ -1358,17 +1456,22 @@ class SetupOverlay(QWidget):
                     }}
                     QPushButton:hover {{ color: {C.TEXT}; border: 1px solid {C.BORDER_B}; }}
                 """)
-        url, model, editable = self._PRESET_DEFAULTS[key]
-        self._url_input.setText(url)
-        self._model_input.setText(model)
-        self._url_input.setEnabled(editable or key == "custom")
-        self._model_input.setEnabled(True)
-        if key == "empero":
-            self._key_input.setPlaceholderText("no key needed — free endpoint")
-        elif key == "custom" and url.startswith("http://localhost"):
-            self._key_input.setPlaceholderText("not required for local servers")
-        else:
-            self._key_input.setPlaceholderText("sk-…")
+        if update_fields and key in self._PRESET_DEFAULTS:
+            url, model, editable = self._PRESET_DEFAULTS[key]
+            self._url_input.setText(url)
+            self._model_input.setText(model)
+            self._url_input.setEnabled(editable or key == "custom")
+            self._model_input.setEnabled(True)
+            if key == "empero":
+                self._key_input.setPlaceholderText("no key needed — free endpoint")
+            elif key == "custom" and url.startswith("http://localhost"):
+                self._key_input.setPlaceholderText("not required for local servers")
+            elif key == "gemini":
+                self._key_input.setPlaceholderText("Paste your Gemini API key (AIzaSy...)")
+            elif key == "groq":
+                self._key_input.setPlaceholderText("Paste your Groq API key (gsk_...)")
+            else:
+                self._key_input.setPlaceholderText("sk-…")
 
     def _submit(self):
         key   = self._key_input.text().strip()
@@ -1386,7 +1489,6 @@ class SetupOverlay(QWidget):
                 f" QLineEdit {{ border: 1px solid {C.RED}; }}"
             )
             return
-        # A key is not strictly required (local endpoints) — proceed either way.
         self.done.emit(key, url, model, self._sel_os)
 
 
@@ -1766,6 +1868,10 @@ class MainWindow(QMainWindow):
         sc_full.activated.connect(self._toggle_fullscreen)
         sc_intr = QShortcut(QKeySequence("Escape"), self)
         sc_intr.activated.connect(self._do_interrupt)
+        sc_cfg  = QShortcut(QKeySequence("Ctrl+K"), self)
+        sc_cfg.activated.connect(self._open_settings)
+        sc_cfg2 = QShortcut(QKeySequence("Ctrl+,"), self)
+        sc_cfg2.activated.connect(self._open_settings)
 
     def _show_camera_frame(self, img_bytes: bytes):
         """Slot — display camera preview overlay (main thread)."""
@@ -2155,7 +2261,7 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         cw = self.centralWidget()
         if self._overlay and self._overlay.isVisible():
-            ow, oh = 460, 390
+            ow, oh = 480, 440
             self._overlay.setGeometry(
                 (cw.width()  - ow) // 2,
                 (cw.height() - oh) // 2,
@@ -2437,6 +2543,23 @@ class MainWindow(QMainWindow):
         """)
         remote_btn.clicked.connect(self._open_remote)
         lay.addWidget(remote_btn)
+
+        cfg_btn = QPushButton("⚙  API KEY / SETTINGS")
+        cfg_btn.setFixedHeight(30)
+        cfg_btn.setFont(QFont("Courier New", 8, QFont.Weight.Bold))
+        cfg_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        cfg_btn.setToolTip("Configure LLM API Key, Model, Provider, or Server [Ctrl+K]")
+        cfg_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #00121a; color: {C.ACC2};
+                border: 1px solid {C.BORDER_B}; border-radius: 3px;
+            }}
+            QPushButton:hover {{
+                background: {C.PRI_GHO}; color: {C.PRI}; border: 1px solid {C.PRI};
+            }}
+        """)
+        cfg_btn.clicked.connect(self._open_settings)
+        lay.addWidget(cfg_btn)
 
         fs_btn = QPushButton("⛶  FULLSCREEN  [F11]")
         fs_btn.setFixedHeight(26)
@@ -2756,6 +2879,9 @@ class MainWindow(QMainWindow):
         if not txt: return
         self._input.clear()
         self._log.append_log(f"You: {txt}")
+        if txt.lower() in ("/settings", "settings", "api key", "apikey", "/api", "change api key", "update api key", "config"):
+            self._open_settings()
+            return
         if self.on_text_command:
             threading.Thread(target=self.on_text_command, args=(txt,), daemon=True).start()
 
@@ -2775,29 +2901,55 @@ class MainWindow(QMainWindow):
         # Legacy: bare Gemini key still accepted (mapped internally)
         return bool(d.get("gemini_api_key")) and bool(d.get("os_system"))
 
-    def _show_setup(self):
-        ov = SetupOverlay(self.centralWidget())
+    def _open_settings(self):
+        if self._overlay and self._overlay.isVisible():
+            self._overlay.raise_()
+            return
+        self._show_setup(is_settings=True)
+
+    def _show_setup(self, is_settings: bool = False):
+        if self._overlay:
+            self._overlay.deleteLater()
+            self._overlay = None
+        ov = SetupOverlay(self.centralWidget(), is_settings=is_settings)
         cw = self.centralWidget()
-        ow, oh = 460, 390
+        ow, oh = 480, 440
         ov.setGeometry(
             (cw.width()  - ow) // 2,
             (cw.height() - oh) // 2,
             ow, oh,
         )
         ov.done.connect(self._on_setup_done)
+        ov.cancelled.connect(self._on_setup_cancelled)
         ov.show()
+        ov.raise_()
         self._overlay = ov
+
+    def _on_setup_cancelled(self):
+        if self._overlay:
+            self._overlay.hide()
+            self._overlay = None
 
     def _on_setup_done(self, key: str, url: str, model: str, os_name: str):
         os.makedirs(CONFIG_DIR, exist_ok=True)
+        cfg_data = {}
+        if API_FILE.exists():
+            try:
+                cfg_data = json.loads(API_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        cfg_data.update({
+            "llm_provider": "openai",
+            "llm_url":      url,
+            "llm_model":    model,
+            "llm_api_key":  key,
+            "os_system":    os_name,
+        })
+        if "googleapis" in url:
+            cfg_data["gemini_api_key"] = key
+            cfg_data["vision_model"] = model
         API_FILE.write_text(
-            json.dumps({
-                "llm_provider": "openai",
-                "llm_url":      url,
-                "llm_model":    model,
-                "llm_api_key":  key,
-                "os_system":    os_name,
-            }, indent=4),
+            json.dumps(cfg_data, indent=4),
             encoding="utf-8",
         )
         self._ready = True
@@ -2805,7 +2957,7 @@ class MainWindow(QMainWindow):
             self._overlay.hide()
             self._overlay = None
         self._apply_state("LISTENING")
-        self._log.append_log(f"SYS: Initialised. OS={os_name.upper()}. JARVIS online.")
+        self._log.append_log(f"SYS: API config updated. Model: {model}. Ready.")
 
 class _RootShim:
     def __init__(self, app: QApplication):
