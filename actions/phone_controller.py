@@ -54,7 +54,6 @@ def _ensure_adb() -> bool:
     ADB_BIN = Path("adb")
     return False
 
-# Ensure on startup or first call
 _ensure_adb()
 
 # Popular Android App Packages
@@ -75,6 +74,9 @@ APP_PACKAGES = {
     "photos":     "com.google.android.apps.photos",
     "gmail":      "com.google.android.gm",
     "clock":      "com.google.android.deskclock",
+    "phonepe":    "com.phonepe.app",
+    "paytm":      "net.one97.paytm",
+    "gpay":       "com.google.android.apps.nbu.paisa.user",
 }
 
 def _run_adb(*args, timeout: int = 10) -> tuple[int, str]:
@@ -94,16 +96,26 @@ def _run_adb(*args, timeout: int = 10) -> tuple[int, str]:
     except Exception as e:
         return 1, str(e)
 
-def get_connected_devices() -> list[str]:
-    """Returns list of connected Android device IDs."""
+def get_device_status() -> dict:
+    """Returns detailed status of connected Android devices."""
     code, out = _run_adb("devices")
-    devices = []
+    status = {"devices": [], "unauthorized": [], "offline": []}
     if code == 0:
         for line in out.splitlines()[1:]:
             parts = line.split()
-            if len(parts) >= 2 and parts[1] == "device":
-                devices.append(parts[0])
-    return devices
+            if len(parts) >= 2:
+                dev_id, st = parts[0], parts[1].lower()
+                if st == "device":
+                    status["devices"].append(dev_id)
+                elif st == "unauthorized":
+                    status["unauthorized"].append(dev_id)
+                elif st == "offline":
+                    status["offline"].append(dev_id)
+    return status
+
+def get_connected_devices() -> list[str]:
+    """Returns list of connected and authorized Android device IDs."""
+    return get_device_status()["devices"]
 
 def _open_phone_link() -> str:
     """Launch Microsoft Phone Link (Windows default)."""
@@ -116,27 +128,52 @@ def _open_phone_link() -> str:
 def _is_screen_on() -> bool:
     """Check if device screen is currently on."""
     code, out = _run_adb("shell", "dumpsys", "power")
-    if "mHoldingDisplaySuspendBlocker=true" in out or "Display Power: state=ON" in out:
+    if any(k in out for k in ("mHoldingDisplaySuspendBlocker=true", "Display Power: state=ON", "mWakefulness=Awake")):
         return True
     return False
 
+def get_screen_size() -> tuple[int, int]:
+    """Query physical screen resolution."""
+    code, out = _run_adb("shell", "wm", "size")
+    m = re.search(r"(\d+)x(\d+)", out)
+    if m:
+        return int(m.group(1)), int(m.group(2))
+    return 1080, 2400
+
 def unlock_phone(pin: str = "") -> str:
-    """Wake screen, swipe up, and optionally enter unlock PIN."""
-    devices = get_connected_devices()
-    if not devices:
-        # Fall back to launching Microsoft Phone Link on PC
+    """Wake screen, dismiss lock screen, and enter PIN if provided."""
+    st = get_device_status()
+
+    # 1. Device is connected but waiting for user to tap 'Allow' on phone
+    if st["unauthorized"]:
+        _run_adb("reconnect")
+        return (
+            "Sir, aapka Android phone connect hai, lekin screen par 'Allow USB Debugging' permission pending hai. "
+            "Kripya phone ki screen unlock karein, 'Always allow from this computer' tick karein, aur 'Allow' par tap karein."
+        )
+
+    # 2. No ADB device attached
+    if not st["devices"]:
         return _open_phone_link()
 
-    # Wake screen if off
-    if not _is_screen_on():
-        _run_adb("shell", "input", "keyevent", "26")
-        time.sleep(0.3)
+    # 3. Wake screen (224 = KEYCODE_WAKEUP, safe even if already on)
+    _run_adb("shell", "input", "keyevent", "224")
+    time.sleep(0.2)
 
-    # Swipe up to reveal lock screen PIN / keypad
-    _run_adb("shell", "input", "swipe", "500", "1600", "500", "400", "250")
+    # 4. Try Android standard lock dismiss
+    _run_adb("shell", "wm", "dismiss-keyguard")
+    _run_adb("shell", "input", "keyevent", "82")  # KEYCODE_MENU (unlocks standard screens)
+    time.sleep(0.3)
+
+    # 5. Dynamic swipe up based on exact device screen dimensions
+    w, h = get_screen_size()
+    start_x = w // 2
+    start_y = int(h * 0.85)
+    end_y   = int(h * 0.20)
+    _run_adb("shell", "input", "swipe", str(start_x), str(start_y), str(start_x), str(end_y), "250")
     time.sleep(0.4)
 
-    # If pin is provided or stored in config
+    # 6. Check for PIN
     if not pin:
         try:
             cfg_path = BASE_DIR / "config" / "api_keys.json"
@@ -152,46 +189,57 @@ def unlock_phone(pin: str = "") -> str:
         _run_adb("shell", "input", "keyevent", "66")  # Enter key
         return "Phone unlocked successfully, sir."
 
-    return "Phone screen turned on and swiped up, sir."
+    return "Phone screen wake karke unlock kar diya hai, sir."
 
 def lock_phone() -> str:
     """Turn off / lock the phone screen."""
-    devices = get_connected_devices()
-    if not devices:
+    st = get_device_status()
+    if st["unauthorized"]:
+        return "Phone connected hai lekin unauthorized hai. Phone par 'Allow' dabayein."
+    if not st["devices"]:
         return "No Android device connected via ADB."
-    if _is_screen_on():
-        _run_adb("shell", "input", "keyevent", "26")
+    _run_adb("shell", "input", "keyevent", "26")
     return "Phone screen locked, sir."
 
 def open_phone_app(app_name: str) -> str:
     """Open an app on the Android phone."""
-    devices = get_connected_devices()
-    if not devices:
+    st = get_device_status()
+    if st["unauthorized"]:
+        _run_adb("reconnect")
+        return (
+            "Sir, phone par 'Allow USB Debugging' popup par 'Allow' karein pehle."
+        )
+    if not st["devices"]:
         return _open_phone_link()
 
     # Make sure phone is awake
-    if not _is_screen_on():
-        unlock_phone()
+    _run_adb("shell", "input", "keyevent", "224")
+    _run_adb("shell", "wm", "dismiss-keyguard")
 
     app_key = app_name.lower().strip()
     if app_key == "camera":
         _run_adb("shell", "am", "start", "-a", "android.media.action.STILL_IMAGE_CAMERA")
         return "Opened camera on your phone, sir."
+    elif app_key in ("dialer", "phone"):
+        _run_adb("shell", "am", "start", "-a", "android.intent.action.DIAL")
+        return "Opened dialer on your phone, sir."
 
     package = APP_PACKAGES.get(app_key)
     if package:
         code, out = _run_adb("shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
         if code == 0:
             return f"Opened {app_name} on your phone, sir."
-    
+
     # Generic attempt by app name
     code, out = _run_adb("shell", "am", "start", "-n", f"{app_name}/.MainActivity")
     return f"Sent command to open {app_name} on your phone, sir."
 
 def get_phone_battery() -> str:
     """Query current battery percentage of the phone."""
-    devices = get_connected_devices()
-    if not devices:
+    st = get_device_status()
+    if st["unauthorized"]:
+        return "Phone unauthorized hai. Phone screen par 'Allow' dabayein."
+    if not st["devices"]:
         return "No phone connected to check battery."
     code, out = _run_adb("shell", "dumpsys", "battery")
     m = re.search(r"level:\s*(\d+)", out)
@@ -202,6 +250,9 @@ def get_phone_battery() -> str:
 
 def phone_home() -> str:
     """Press home button on phone."""
+    st = get_device_status()
+    if not st["devices"]:
+        return "No device connected."
     _run_adb("shell", "input", "keyevent", "3")
     return "Navigated to home screen on phone, sir."
 
@@ -239,10 +290,13 @@ def phone_controller(parameters: dict = None, player=None, **kwargs) -> str:
     return res
 
 if __name__ == "__main__":
-    devs = get_connected_devices()
-    print("Connected devices:", devs)
-    if devs:
-        print(get_phone_battery())
+    st = get_device_status()
+    print("Device status:", st)
+    if st["devices"]:
+        print("Battery:", get_phone_battery())
+    elif st["unauthorized"]:
+        print("Device is UNAUTHORIZED! User must allow debugging on screen.")
+        print(unlock_phone())
     else:
         print("No devices. Testing Phone Link trigger...")
         print(unlock_phone())
