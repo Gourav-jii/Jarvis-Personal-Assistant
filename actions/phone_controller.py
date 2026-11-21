@@ -96,6 +96,19 @@ def _run_adb(*args, timeout: int = 10) -> tuple[int, str]:
     except Exception as e:
         return 1, str(e)
 
+def _try_auto_reconnect_wifi():
+    """Attempt auto-connecting to phone over Wi-Fi / Hotspot gateway on port 5555."""
+    try:
+        out = subprocess.check_output(['ipconfig'], text=True)
+        wifi_match = re.search(r'Wireless LAN adapter Wi-Fi:.*?(?=\n\S|\Z)', out, re.DOTALL)
+        if wifi_match:
+            ips = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', wifi_match.group(0))
+            for ip in reversed(ips):
+                if not ip.startswith('255.') and not ip.endswith('.0') and not ip.endswith('.255'):
+                    _run_adb("connect", f"{ip}:5555", timeout=2)
+    except Exception:
+        pass
+
 def get_device_status() -> dict:
     """Returns detailed status of connected Android devices."""
     code, out = _run_adb("devices")
@@ -111,6 +124,17 @@ def get_device_status() -> dict:
                     status["unauthorized"].append(dev_id)
                 elif st == "offline":
                     status["offline"].append(dev_id)
+
+    # If no devices attached, try auto-connecting over Wi-Fi / Hotspot
+    if not status["devices"] and not status["unauthorized"]:
+        _try_auto_reconnect_wifi()
+        code, out = _run_adb("devices")
+        if code == 0:
+            for line in out.splitlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1].lower() == "device":
+                    status["devices"].append(parts[0])
+
     return status
 
 def get_connected_devices() -> list[str]:

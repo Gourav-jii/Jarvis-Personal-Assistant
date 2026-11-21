@@ -41,7 +41,7 @@ A futuristic desktop AI assistant inspired by Tony Stark's J.A.R.V.I.S. Built wi
   - **Screen Unlock & Wake**: Wake phone, swipe up lock screen, and automatically enter PIN by voice (*"Jarvis, mera phone open karo"*, *"Jarvis, phone unlock karo"*).
   - **Mobile App Launcher**: Open phone apps instantly (*"Jarvis, phone par WhatsApp open karo"*, *"phone par YouTube chalao"*, *"phone ka camera open karo"*).
   - **Phone Telemetry**: Real-time battery status by voice (*"Jarvis, phone ki battery kitni hai?"*).
-  - **Wireless / USB ADB & Phone Link**: Bundled Google Android ADB binaries with auto-fallback to Microsoft Phone Link on Windows.
+  - **Wireless & USB ADB Automation**: Zero-configuration bundled Google ADB tools with automatic Wi-Fi and phone hotspot gateway auto-discovery on port 5555.
 
 - **Mobile Remote Dashboard**:
   - Built-in secure FastAPI server with AES-256 session encryption.
@@ -104,7 +104,8 @@ You can easily configure everything using the **In-App Settings UI** on boot, or
   "tts_engine": "edgetts",
   "tts_voice": "hi-IN-MadhurNeural",
   "stt_language": "auto",
-  "os_system": "windows"
+  "os_system": "windows",
+  "phone_pin": "YOUR_PIN_HERE"
 }
 ```
 
@@ -146,15 +147,46 @@ Double-click **`run_silent.vbs`** to launch Jarvis silently in the background wi
 - *"Volume 50% kar do"* / *"Volume mute karo"*
 - *"Brightness badhao"* / *"Wi-Fi toggle karo"*
 
-### 3. General Intelligence & Queries:
+### 3. Android Phone Voice Controls:
+- *"Jarvis, phone unlock karo"* (Wakes screen, auto-swipes, and types PIN)
+- *"Jarvis, phone par WhatsApp open karo"* (Opens WhatsApp directly on mobile)
+- *"Jarvis, phone par YouTube chalao"* (Launches YouTube app on phone)
+- *"Jarvis, phone ka camera open karo"* (Triggers native phone camera)
+- *"Jarvis, mere phone ki battery kitni hai?"* (Reports real-time phone battery %)
+- *"Jarvis, phone lock kar do"* (Locks mobile screen)
+- *"Jarvis, phone ke home par jao"* (Presses mobile Home button)
+
+### 4. General Intelligence & Queries:
 - *"Jarvis, kya haal hai?"*
 - *"Time kya ho raha hai?"* (Replies in standard 12-hour AM/PM format)
 - *"Today's weather report in Delhi"*
 - *"Flight status from Delhi to Mumbai"*
 
-### 4. Settings & Interruptions:
+### 5. Settings & Interruptions:
 - Say *"Change API key"* or press **`Ctrl + K`** to open the settings panel.
 - Say *"Stop"*, *"Chup"*, *"Ruk jao"*, or tap **`ESC`** to interrupt speech immediately.
+
+---
+
+## 📱 Android Phone Voice Automation Setup
+
+Jarvis natively controls connected Android devices over USB or wirelessly:
+
+### 1. One-Time USB Setup (1 minute):
+1. On your phone, go to **Settings > About Phone** and tap **Build Number** 7 times to enable Developer Options.
+2. In **Settings > Developer Options**, turn ON **USB Debugging**.
+3. Plug your phone into PC with a USB cable. When prompted with *"Allow USB debugging?"*, check **"Always allow from this computer"** and tap **Allow**.
+
+### 2. Wireless & Mobile Hotspot Auto-Discovery:
+- **No Third-Party Apps Needed**: Jarvis automatically discovers your phone's Wi-Fi or Hotspot gateway IP and connects over port `5555`.
+- **Cable-Free Freedom**: Once connected, you can unplug the USB cable — all voice commands (unlock, app launches, battery checks) continue working wirelessly over the room Wi-Fi or phone hotspot.
+
+### 3. Screen Unlock & PIN Configuration:
+- To allow Jarvis to unlock PIN-protected devices, add your lock screen PIN to `config/api_keys.json`:
+  ```json
+  "phone_pin": "YOUR_PIN_HERE"
+  ```
+- Jarvis dynamically senses screen dimensions and aspect ratios, waking the screen (`KEYCODE_WAKEUP`), dismissing keyguard, and securely typing your PIN.
 
 ---
 
@@ -176,6 +208,7 @@ Double-click **`run_silent.vbs`** to launch Jarvis silently in the background wi
 │   ├── llm_client.py           # Provider-agnostic streaming LLM client
 │   └── prompt.txt              # Jarvis persona, Hinglish protocol & instructions
 ├── actions/                    # Tool handlers & automation actions
+│   ├── phone_controller.py     # Android ADB & wireless phone automation & unlock
 │   ├── send_message.py         # WhatsApp, Telegram, Instagram DM automation
 │   ├── open_app.py             # Cross-platform desktop application launcher
 │   ├── computer_settings.py    # Volume, brightness, Wi-Fi & window management
