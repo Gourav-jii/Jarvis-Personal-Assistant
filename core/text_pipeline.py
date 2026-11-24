@@ -435,7 +435,10 @@ class TextPipeline:
                     self._is_speaking = False
                     was_interrupted = self._interrupted
                 if not self.ui.muted and not was_interrupted:
-                    self.ui.set_state("LISTENING")
+                    try:
+                        self.ui.set_state("LISTENING")
+                    except Exception:
+                        pass
                 # brief guard so speaker audio doesn't re-trigger VAD
                 self._post_speak_cooldown_until = time.monotonic() + 0.6
 

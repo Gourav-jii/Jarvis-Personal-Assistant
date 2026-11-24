@@ -3035,10 +3035,18 @@ class JarvisUI:
         self._win.notify_phone_connected()
 
     def set_state(self, state: str):
-        self._win._state_sig.emit(state)
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win._state_sig.emit(state)
+        except (RuntimeError, AttributeError):
+            pass
 
     def write_log(self, text: str):
-        self._win._log_sig.emit(text)
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win._log_sig.emit(text)
+        except (RuntimeError, AttributeError):
+            pass
 
     def wait_for_api_key(self):
         while not self._win._ready:
@@ -3046,24 +3054,44 @@ class JarvisUI:
 
     def show_content(self, title: str, text: str):
         """Thread-safe: display content in the panel below the HUD."""
-        self._win._content_sig.emit(title[:48], text[:4000])
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win._content_sig.emit(title[:48], text[:4000])
+        except (RuntimeError, AttributeError):
+            pass
 
     def prompt_reconfig(self):
         """Thread-safe: show the API key setup overlay (e.g. after an auth error)."""
-        self._win._ready = False
-        self._win._reconfig_sig.emit()
+        try:
+            self._win._ready = False
+            if hasattr(self, "_win") and self._win is not None:
+                self._win._reconfig_sig.emit()
+        except (RuntimeError, AttributeError):
+            pass
 
     def show_camera_frame(self, img_bytes: bytes):
         """Thread-safe: show a webcam frame in the small overlay (screen captures)."""
-        self._win._camera_sig.emit(img_bytes)
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win._camera_sig.emit(img_bytes)
+        except (RuntimeError, AttributeError):
+            pass
 
     def start_camera_stream(self) -> None:
         """Thread-safe: start live camera feed in the full HUD area."""
-        self._win.start_camera_stream()
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win.start_camera_stream()
+        except (RuntimeError, AttributeError):
+            pass
 
     def stop_camera_stream(self) -> None:
         """Thread-safe: stop the live camera feed."""
-        self._win.stop_camera_stream()
+        try:
+            if hasattr(self, "_win") and self._win is not None:
+                self._win.stop_camera_stream()
+        except (RuntimeError, AttributeError):
+            pass
 
     def start_speaking(self):
         self.set_state("SPEAKING")
