@@ -77,6 +77,23 @@ APP_PACKAGES = {
     "phonepe":    "com.phonepe.app",
     "paytm":      "net.one97.paytm",
     "gpay":       "com.google.android.apps.nbu.paisa.user",
+    "free fire":  "com.garena.game.ffi",
+    "freefire":   "com.garena.game.ffi",
+    "free fire max": "com.dts.freefiremax",
+    "freefire max":  "com.dts.freefiremax",
+    "bgmi":       "com.pubg.imobile",
+    "pubg":       "com.tencent.ig",
+    "snapchat":   "com.snapchat.android",
+    "linkedin":   "com.linkedin.android",
+    "flipkart":   "com.flipkart.android",
+    "amazon":     "in.amazon.mShop.android.shopping",
+    "myntra":     "com.myntra.android",
+    "meesho":     "com.meesho.supply",
+    "truecaller": "com.truecaller",
+    "chatgpt":    "com.openai.chatgpt",
+    "vlc":        "org.videolan.vlc",
+    "jio":        "com.jio.myjio",
+    "myjio":      "com.jio.myjio",
 }
 
 def _run_adb(*args, timeout: int = 10) -> tuple[int, str]:
@@ -244,6 +261,27 @@ def open_phone_app(app_name: str) -> str:
         return "Opened dialer on your phone, sir."
 
     package = APP_PACKAGES.get(app_key)
+    if not package:
+        # Check partial match in APP_PACKAGES (e.g. 'fire' in 'free fire')
+        for k, v in APP_PACKAGES.items():
+            if k in app_key or app_key in k:
+                package = v
+                break
+
+    # If still not found, search installed packages on phone dynamically
+    if not package:
+        try:
+            code, out = _run_adb("shell", "pm", "list", "packages", "-3")
+            if code == 0:
+                clean_term = re.sub(r"[^a-zA-Z0-9]", "", app_key)
+                for line in out.splitlines():
+                    pkg_candidate = line.replace("package:", "").strip()
+                    if clean_term in pkg_candidate.lower() or any(w in pkg_candidate.lower() for w in app_key.split() if len(w) > 3):
+                        package = pkg_candidate
+                        break
+        except Exception:
+            pass
+
     if package:
         code, out = _run_adb("shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1")
         if code == 0:
